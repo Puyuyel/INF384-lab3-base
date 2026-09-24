@@ -10,8 +10,8 @@ RUN npm run build
 
 FROM public.ecr.aws/lambda/nodejs:20
 
-WORKDIR ${LAMBDA_TASK_ROOT}
+WORKDIR /var/task
 
-COPY --from=build /build/dist/handler.js ${LAMBDA_TASK_ROOT}/dist/handler.js
+COPY --from=build /build/dist/handler.js /var/task/dist/handler.js
 
 CMD ["dist/handler.handler"]
