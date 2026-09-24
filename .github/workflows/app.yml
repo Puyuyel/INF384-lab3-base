@@ -424,9 +424,14 @@ jobs:
             --image-ids imageTag="${TAG_SHA_SHORT}" \
             --query 'imageDetails[0].imageDigest' \
             --output text)"
-          IMAGE_URI="${REGISTRO}/${IMAGEN}@${DIGEST}"
 
-          echo "digest=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          if [ -z "${DIGEST}" ]; then
+            echo "::error::No se pudo resolver el digest de la imagen publicada en ECR."
+            exit 1
+          fi
+
+          IMAGE_URI="${REGISTRO}/${IMAGEN}@${DIGEST}"
+          printf 'digest=%s\n' "${IMAGE_URI}" >> "$GITHUB_OUTPUT"
           echo "digest=${IMAGE_URI}"
 
   # Este job viene completo y no se modifica.
@@ -446,10 +451,17 @@ jobs:
           aws-region: us-east-1
 
       - name: Actualizar la funcion por digest
+        env:
+          IMAGE_URI: ${{ needs.publicar.outputs.digest }}
         run: |
+          if [ -z "${IMAGE_URI}" ]; then
+            echo "::error::La salida digest del job publicar está vacía. Revisa la publicación de la imagen."
+            exit 1
+          fi
+
           aws lambda update-function-code \
             --function-name inf384-lab3 \
-            --image-uri ${{ needs.publicar.outputs.digest }}
+            --image-uri "${IMAGE_URI}"
 
       - name: Esperar a que la actualizacion termine
         run: aws lambda wait function-updated --function-name inf384-lab3
