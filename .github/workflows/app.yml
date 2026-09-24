@@ -344,6 +344,12 @@ jobs:
       - name: Terraform init
         run: terraform init -backend-config=backend.hcl
 
+      - name: Descargar plan guardado
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: .
+
       - name: Aplicar plan guardado
         run: terraform apply -input=false tfplan
 
@@ -412,9 +418,12 @@ jobs:
             .
           docker push "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}"
           docker push "${REGISTRO}/${IMAGEN}:prd"
-          DIGEST="$(docker image inspect "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}" --format '{{index .RepoDigests 0}}')"
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "digest=${DIGEST}"
+
+          DIGEST="$(docker push "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}" 2>/dev/null | tail -n 1 | awk '{print $3}')"
+          IMAGE_URI="${REGISTRO}/${IMAGEN}@${DIGEST}"
+
+          echo "digest=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "digest=${IMAGE_URI}"
 
   # Este job viene completo y no se modifica.
   # Las estrategias de despliegue y la verificacion posterior son contenido
