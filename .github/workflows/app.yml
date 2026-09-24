@@ -436,18 +436,18 @@ jobs:
 
           IMAGE_URI="${IMAGE_REPOSITORY}@${DIGEST}"
           echo "Imagen publicada: ${IMAGE_URI}"
-          echo "digest=${IMAGE_URI}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
 
       - name: Verificar salida digest
         env:
-          IMAGE_URI: ${{ steps.publicar_imagen.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.publicar_imagen.outputs.digest }}
         run: |
           set -Eeuo pipefail
-          if [[ -z "${IMAGE_URI}" ]]; then
-            echo "::error::El paso publicar_imagen no produjo digest"
+          if [[ -z "${IMAGE_DIGEST}" || "${IMAGE_DIGEST}" == "None" ]]; then
+            echo "::error::El paso publicar_imagen no produjo un digest"
             exit 1
           fi
-          echo "Digest generado correctamente: ${IMAGE_URI}"
+          echo "Digest generado correctamente: ${IMAGE_DIGEST}"
 
   # Este job viene completo y no se modifica.
   # Las estrategias de despliegue y la verificacion posterior son contenido
@@ -467,12 +467,17 @@ jobs:
 
       - name: Actualizar la funcion por digest
         env:
-          IMAGE_URI: ${{ needs.publicar.outputs.digest }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          IMAGE_DIGEST: ${{ needs.publicar.outputs.digest }}
         run: |
-          if [ -z "${IMAGE_URI}" ]; then
+          set -Eeuo pipefail
+
+          if [[ -z "${IMAGE_DIGEST}" || "${IMAGE_DIGEST}" == "None" ]]; then
             echo "::error::La salida digest del job publicar está vacía. Revisa la publicación de la imagen."
             exit 1
           fi
+
+          IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/inf384-lab3@${IMAGE_DIGEST}"
 
           aws lambda update-function-code \
             --function-name inf384-lab3 \
