@@ -419,7 +419,11 @@ jobs:
           docker push "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}"
           docker push "${REGISTRO}/${IMAGEN}:prd"
 
-          DIGEST="$(docker push "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}" 2>/dev/null | tail -n 1 | awk '{print $3}')"
+          DIGEST="$(aws ecr describe-images \
+            --repository-name "${IMAGEN}" \
+            --image-ids imageTag="${TAG_SHA_SHORT}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
           IMAGE_URI="${REGISTRO}/${IMAGEN}@${DIGEST}"
 
           echo "digest=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
