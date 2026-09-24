@@ -65,7 +65,7 @@ resource "aws_ecr_repository_policy" "descarga_lambda" {
 # o la funcion crea el suyo y esta retencion no aplica.
 resource "aws_cloudwatch_log_group" "funcion" {
   name              = "/aws/lambda/${var.nombre_aplicacion}"
-  retention_in_days = "7"
+  retention_in_days = 7
 
   tags = local.etiquetas
 }
