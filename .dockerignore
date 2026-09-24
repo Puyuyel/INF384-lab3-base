@@ -1,0 +1,15 @@
+.git
+.gitignore
+.github/
+.vscode/
+node_modules/
+coverage/
+dist/
+test/
+infra/
+README.md
+*.log
+.env
+.env.*
+.dockerignore
+.dockerignore.ejemplo
