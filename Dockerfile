@@ -3,7 +3,7 @@
 # linea anterior. Corregirlas es el bloque A1 de la guia del laboratorio.
 
 # defecto 1
-FROM public.ecr.aws/lambda/nodejs:20
+FROM public.ecr.aws/lambda/nodejs:20 AS build
 
 # defecto 2
 COPY package*.json ./
