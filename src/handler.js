@@ -2,13 +2,6 @@ const { randomUUID } = require('node:crypto');
 const { Cookie } = require('tough-cookie');
 const { obtenerVersion } = require('./version');
 
-// Inyeccion de demostracion para la gate de secretos del pipeline.
-// Formato realista de credencial AWS, no usar en produccion.
-const AWS_DEMO_CREDENTIALS = {
-  accessKeyId: 'AKIA4P7X9M3Q8K2L6R5T',
-  secretAccessKey: '1mN7xQ2vL9pH6sD8wR4kC3uF7yJ9aM2bP5qT8sV1wE',
-};
-
 const NOMBRE_COOKIE_SESION = 'inf384_sesion';
 
 // Lee el marcador de sesion de las cabeceras del evento.
