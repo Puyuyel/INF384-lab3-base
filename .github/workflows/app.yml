@@ -206,23 +206,17 @@ jobs:
         run: |
           echo "::warning::La compuerta estatica se reporta como informativa y queda visible en la ejecucion."
 
-  # TODO
   # Construir la imagen de la aplicacion y publicarla en el registro privado.
   #
   # Depende de los cuatro jobs anteriores y corre solo desde la rama principal.
   #
-  # La imagen se publica con tres tags independientes sobre el mismo manifiesto:
-  # el sha corto del commit, la version y el ambiente.
+  # La imagen se publica con dos tags independientes sobre el mismo manifiesto:
+  # el sha corto del commit y el ambiente.
   #
   #   - El sha es el tag con el que se publica. Nace del commit, siempre
   #     existe y no se reasigna nunca.
-  #   - La version identifica el artefacto para las personas y tampoco se
-  #     reasigna.
-  #   - El de ambiente se reasigna en cada publicacion y siempre apunta a lo
+  #   - El ambiente se reasigna en cada publicacion y siempre apunta a lo
   #     ultimo publicado para ese ambiente.
-  #
-  # Los dos ultimos se apuntan al manifiesto ya publicado. Agregar un tag a
-  # una imagen publicada no reenvia capas.
   #
   # La construccion es para linux/amd64 y declara el label
   # org.opencontainers.image.title con el nombre de la aplicacion.
@@ -232,18 +226,47 @@ jobs:
   # El job desplegar consume la salida 'digest' de este job. El formato es
   # <registro>/<aplicacion>@sha256:... Exponer solo el sha del digest, o
   # nombrar la salida de otra manera, rompe el despliegue.
-  #
-  # outputs:
-  #   digest: # TODO
-  #
-  # Sustituir el paso centinela por la implementacion.
   publicar:
+    needs: [pruebas, calidad, secretos, dependencias, estatico]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.publicar.outputs.digest }}
     steps:
-      - name: Sin implementar
+      - uses: actions/checkout@v4
+
+      - name: Configurar AWS para ECR
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Iniciar sesion en ECR
         run: |
-          echo "::error::El job 'publicar' no esta implementado."
-          exit 1
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+      - name: Construir y publicar la imagen
+        id: publicar
+        env:
+          REGISTRO: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+          IMAGEN: inf384-lab3
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TAG_SHA_SHORT="${SHA::7}"
+          docker build \
+            --platform linux/amd64 \
+            --label "org.opencontainers.image.title=${IMAGEN}" \
+            --tag "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}" \
+            --tag "${REGISTRO}/${IMAGEN}:prd" \
+            .
+          docker push "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}"
+          docker push "${REGISTRO}/${IMAGEN}:prd"
+          DIGEST="$(docker image inspect "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}" --format '{{index .RepoDigests 0}}')"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "digest=${DIGEST}"
 
   # Este job viene completo y no se modifica.
   # Las estrategias de despliegue y la verificacion posterior son contenido
