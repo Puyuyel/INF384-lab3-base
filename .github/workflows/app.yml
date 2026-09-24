@@ -56,7 +56,6 @@ jobs:
           path: coverage/
           if-no-files-found: error
 
-  # TODO
   # Publicar el analisis de calidad y la cobertura en SonarQube Cloud, como
   # en el Laboratorio 2.
   #
@@ -70,17 +69,36 @@ jobs:
   #
   # Esta compuerta no detiene el pipeline: el resultado queda en SonarQube
   # Cloud y se lee ahi.
-  #
-  # Sustituir el paso centinela por la implementacion.
   calidad:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
-      - name: Sin implementar
-        run: |
-          echo "::error::El job 'calidad' no esta implementado."
-          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  # TODO
+      - name: Descargar la cobertura generada
+        uses: actions/download-artifact@v4
+        with:
+          name: cobertura
+          path: coverage
+        continue-on-error: true
+
+      - name: Analizar con SonarQube Cloud
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_ORG: ${{ vars.SONAR_ORG }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+        continue-on-error: true
+
+      - name: Mostrar resultado visible en la ejecucion
+        if: always()
+        run: |
+          echo "::warning::La compuerta de calidad queda como informativa; el resultado se ve en SonarQube Cloud."
+
   # Buscar credenciales escritas en el codigo y en el historial del repositorio.
   # El alcance incluye el historial completo, no solo el ultimo commit.
   #
@@ -90,17 +108,18 @@ jobs:
   # Una credencial no se exceptua. Se retira del codigo, se retira del
   # historial y se rota en el origen. Silenciar el hallazgo deja la credencial
   # viva y ademas apaga el control para la proxima.
-  #
-  # Sustituir el paso centinela por la implementacion.
   secretos:
     runs-on: ubuntu-latest
     steps:
-      - name: Sin implementar
-        run: |
-          echo "::error::El job 'secretos' no esta implementado."
-          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  # TODO
+      - name: Buscar credenciales con Gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Contrastar el arbol de dependencias declarado en package-lock.json contra
   # vulnerabilidades conocidas.
   #
@@ -111,30 +130,81 @@ jobs:
   # Esta compuerta no detiene el pipeline. El hallazgo no cuelga de ninguna
   # linea de codigo: la anotacion, si se decide no corregir, va en el paso
   # que lo detecta.
-  #
-  # Sustituir el paso centinela por la implementacion.
   dependencias:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
-      - name: Sin implementar
-        run: |
-          echo "::error::El job 'dependencias' no esta implementado."
-          exit 1
+      - uses: actions/checkout@v4
 
-  # TODO
+      - name: Analizar vulnerabilidades del lockfile
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+          ignore-unfixed: false
+          scanners: vuln
+        continue-on-error: true
+
+      - name: Mostrar hallazgos visibles en la ejecucion
+        if: always()
+        run: |
+          echo "::warning::La compuerta de dependencias es informativa; el hallazgo queda visible en la salida del paso."
+
   # Buscar patrones explotables en el codigo fuente.
   #
   # Esta compuerta no detiene el pipeline. El hallazgo cuelga de una linea
   # concreta: la anotacion, si se decide no corregir, va junto a esa linea.
-  #
-  # Sustituir el paso centinela por la implementacion.
   estatico:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
-      - name: Sin implementar
+      - uses: actions/checkout@v4
+
+      - name: Analizar el codigo fuente con Semgrep
+        continue-on-error: true
         run: |
-          echo "::error::El job 'estatico' no esta implementado."
-          exit 1
+          docker run --rm \
+            --volume "${PWD}:/src" \
+            --workdir /src \
+            --env SEMGREP_SEND_METRICS=off \
+            semgrep/semgrep \
+            semgrep scan \
+              --config=p/default \
+              --config=p/javascript \
+              --json --quiet \
+              --output=semgrep.json \
+              src/
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          out = Path('semgrep.json')
+          if not out.exists():
+              print('::warning::Semgrep no produjo resultados.')
+              raise SystemExit(0)
+
+          data = json.loads(out.read_text())
+          findings = data.get('results', [])
+          if not findings:
+              print('Semgrep: sin hallazgos.')
+              raise SystemExit(0)
+
+          print(f'::warning::Semgrep encontró {len(findings)} hallazgos.')
+          for item in findings[:10]:
+              path = item.get('path', 'unknown')
+              line = item.get('start', {}).get('line', '?')
+              msg = item.get('extra', {}).get('message', 'Sin mensaje')
+              print(f'::warning::{path}:{line} {msg}')
+          PY
+
+      - name: Resultado visible de la compuerta statica
+        if: always()
+        run: |
+          echo "::warning::La compuerta estatica se reporta como informativa y queda visible en la ejecucion."
 
   # TODO
   # Construir la imagen de la aplicacion y publicarla en el registro privado.
