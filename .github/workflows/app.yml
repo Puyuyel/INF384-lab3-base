@@ -348,7 +348,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan
-          path: .
+          path: infra
 
       - name: Aplicar plan guardado
         run: terraform apply -input=false tfplan
@@ -378,7 +378,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
-      digest: ${{ steps.publicar.outputs.digest }}
+      digest: ${{ steps.publicar_imagen.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -402,37 +402,52 @@ jobs:
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
       - name: Construir y publicar la imagen
-        id: publicar
+        id: publicar_imagen
         env:
           REGISTRO: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
           IMAGEN: inf384-lab3
           SHA: ${{ github.sha }}
+        shell: bash
         run: |
-          set -euo pipefail
-          TAG_SHA_SHORT="${SHA::7}"
+          set -Eeuo pipefail
+          TAG_SHA_SHORT="${SHA:0:7}"
+          IMAGE_REPOSITORY="${REGISTRO}/${IMAGEN}"
+
           docker build \
             --platform linux/amd64 \
             --label "org.opencontainers.image.title=${IMAGEN}" \
-            --tag "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}" \
-            --tag "${REGISTRO}/${IMAGEN}:prd" \
+            --tag "${IMAGE_REPOSITORY}:${TAG_SHA_SHORT}" \
+            --tag "${IMAGE_REPOSITORY}:prd" \
             .
-          docker push "${REGISTRO}/${IMAGEN}:${TAG_SHA_SHORT}"
-          docker push "${REGISTRO}/${IMAGEN}:prd"
+
+          docker push "${IMAGE_REPOSITORY}:${TAG_SHA_SHORT}"
+          docker push "${IMAGE_REPOSITORY}:prd"
 
           DIGEST="$(aws ecr describe-images \
             --repository-name "${IMAGEN}" \
-            --image-ids imageTag="${TAG_SHA_SHORT}" \
+            --image-ids "imageTag=${TAG_SHA_SHORT}" \
             --query 'imageDetails[0].imageDigest' \
             --output text)"
 
-          if [ -z "${DIGEST}" ]; then
-            echo "::error::No se pudo resolver el digest de la imagen publicada en ECR."
+          if [[ -z "${DIGEST}" || "${DIGEST}" == "None" ]]; then
+            echo "::error::ECR no devolvió un digest para ${TAG_SHA_SHORT}"
             exit 1
           fi
 
-          IMAGE_URI="${REGISTRO}/${IMAGEN}@${DIGEST}"
-          printf 'digest=%s\n' "${IMAGE_URI}" >> "$GITHUB_OUTPUT"
-          echo "digest=${IMAGE_URI}"
+          IMAGE_URI="${IMAGE_REPOSITORY}@${DIGEST}"
+          echo "Imagen publicada: ${IMAGE_URI}"
+          echo "digest=${IMAGE_URI}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verificar salida digest
+        env:
+          IMAGE_URI: ${{ steps.publicar_imagen.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${IMAGE_URI}" ]]; then
+            echo "::error::El paso publicar_imagen no produjo digest"
+            exit 1
+          fi
+          echo "Digest generado correctamente: ${IMAGE_URI}"
 
   # Este job viene completo y no se modifica.
   # Las estrategias de despliegue y la verificacion posterior son contenido
