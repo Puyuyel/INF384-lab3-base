@@ -2,19 +2,23 @@
 # Contiene cinco malas practicas deliberadas. Cada una lleva su numero en la
 # linea anterior. Corregirlas es el bloque A1 de la guia del laboratorio.
 
-# defecto 1 - corregido: usar la imagen de runtime de Lambda en la version correcta.
+# defecto 1
 FROM public.ecr.aws/lambda/nodejs:20 AS build
 WORKDIR /build
 
-# defecto 2 - corregido: copiar solo el archivo de dependencias y luego el codigo fuente.
+# defecto 2
 COPY package*.json ./
 RUN npm ci
 
+# defecto 3
 COPY src ./src
 RUN npm run build
 
-# defecto 4 - corregido: no dejar secretos en la imagen.
-# defecto 5 - corregido: no instalar herramientas extra en la etapa final.
+# defecto 4
+# Sin credenciales declaradas.
+
+# defecto 5
+# Sin instalaciones del sistema en la etapa final.
 
 ### NO TOCAR DE ACA EN ADELANTE, CONSIDEREN QUE EL WORKDIR DEBE SER /build
 RUN npx esbuild src/handler.js \
