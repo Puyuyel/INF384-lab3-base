@@ -235,6 +235,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verificar secreto AWS_ACCOUNT_ID
+        run: |
+          if [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ]; then
+            echo "::error::Falta el secreto AWS_ACCOUNT_ID. Debe contener el ID de la cuenta AWS (12 digitos) y no puede quedar vacio."
+            exit 1
+          fi
+
       - name: Configurar AWS para ECR
         uses: aws-actions/configure-aws-credentials@v4
         with:
